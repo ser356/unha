@@ -8,7 +8,6 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, Window};
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
 use tokio::sync::Mutex as AsyncMutex;
 use yt_dlp::client::deps::LibraryInstaller;
 
@@ -98,7 +97,7 @@ fn ext_bin(name: &str) -> String {
 }
 
 async fn probe_binary(cmd: &Path) -> bool {
-    Command::new(cmd)
+    updater::hidden_command(cmd)
         .arg("--version")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -200,7 +199,7 @@ pub async fn probe(
     args.push("--".into());
     args.push(url.to_string());
 
-    let output = Command::new(&ytdlp)
+    let output = updater::hidden_command(&ytdlp)
         .args(&args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -365,7 +364,7 @@ pub async fn download(
     args.push("--".into());
     args.push(url.to_string());
 
-    let mut child = Command::new(&ytdlp)
+    let mut child = updater::hidden_command(&ytdlp)
         .args(&args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

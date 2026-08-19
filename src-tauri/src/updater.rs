@@ -9,6 +9,17 @@ use tokio::process::Command;
 const NIGHTLY_BASE: &str =
     "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download";
 
+pub fn hidden_command(program: &Path) -> Command {
+    #[allow(unused_mut)]
+    let mut cmd = Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    cmd
+}
+
 fn nightly_asset() -> Result<&'static str> {
     #[cfg(all(target_os = "macos"))]
     {
@@ -128,7 +139,7 @@ async fn fetch_nightly(target: &Path) -> Result<()> {
 }
 
 pub async fn current_version(ytdlp: &Path) -> Result<String> {
-    let out = Command::new(ytdlp)
+    let out = hidden_command(ytdlp)
         .arg("--version")
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
