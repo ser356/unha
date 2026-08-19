@@ -15,6 +15,12 @@ src-tauri/gen
 # tauri
 src-tauri/WixTools
 
+# ~/.config/git/ignore global tiene `Icon?` (para el `Icon\r` de Finder de
+# macOS) y ese patrón sin `/` también matchea el basename `icons`, dejando
+# fuera toda la carpeta src-tauri/icons/. Reincluir explícitamente:
+!src-tauri/icons/
+!src-tauri/icons/**
+
 # editor
 .vscode
 .idea
