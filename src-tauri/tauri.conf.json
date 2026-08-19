@@ -23,7 +23,7 @@
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "windowEffects": {
-          "effects": ["hudWindow"],
+          "effects": ["sidebar"],
           "state": "followsWindowActiveState",
           "radius": 12
         }

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import { downloadDir } from "@tauri-apps/api/path";
 
 type Entry = { index: number; id: string; title: string; url: string | null; thumbnail: string | null };
 type Probe = { kind: "single" | "playlist"; title: string; entries: Entry[] };
@@ -76,8 +77,8 @@ function initials(title: string): string {
 
 function folderName(p: string | null): string {
   if (!p) return "";
-  const cleaned = p.replace(/\/+$/, "");
-  const idx = cleaned.lastIndexOf("/");
+  const cleaned = p.replace(/[\/\\]+$/, "");
+  const idx = Math.max(cleaned.lastIndexOf("/"), cleaned.lastIndexOf("\\"));
   return idx >= 0 ? cleaned.slice(idx + 1) : cleaned;
 }
 
@@ -176,6 +177,9 @@ onMounted(async () => {
     if (p.percent >= 99.9) finished.value.add(p.index);
   });
   unlistenLog = await listen<string>("dl://log", (evt) => pushLog(evt.payload));
+  if (!dest.value) {
+    try { dest.value = await downloadDir(); } catch { /* sin permiso: usuario elige */ }
+  }
   await ensureLibs();
 });
 
@@ -186,10 +190,10 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="dragzone"></div>
+  <div class="dragzone" data-tauri-drag-region></div>
 
   <main class="shell">
-    <section class="stage">
+    <section class="stage" data-tauri-drag-region>
       <!-- HERO: título + input pill -->
       <div class="hero">
         <h2 v-if="!probe">Pega el <em>enlace</em>.</h2>

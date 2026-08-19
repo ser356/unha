@@ -182,7 +182,8 @@ pub async fn probe(
     url: &str,
     cookies_from_browser: Option<&str>,
 ) -> Result<Probe> {
-    validate_url(url)?;
+    let url = validate_url(url)?;
+    let url = url.as_str();
     let (ytdlp, _ffmpeg) = resolve_or_install(app).await?;
 
     let mut args: Vec<String> = vec![
@@ -297,7 +298,8 @@ pub async fn download(
     indices: &[u32],
     cookies_from_browser: Option<&str>,
 ) -> Result<()> {
-    validate_url(url)?;
+    let url = validate_url(url)?;
+    let url = url.as_str();
     let (ytdlp, ffmpeg) = resolve_or_install(app).await?;
 
     let dest = Path::new(dest_dir);
@@ -310,6 +312,9 @@ pub async fn download(
     let ffmpeg_dir = ffmpeg
         .parent()
         .ok_or_else(|| anyhow!("directorio de ffmpeg"))?;
+
+    let tmp_root = std::env::temp_dir().join(format!("unha-{}", std::process::id()));
+    std::fs::create_dir_all(&tmp_root).with_context(|| format!("crear {}", tmp_root.display()))?;
 
     let mut args: Vec<String> = vec![
         "-x".into(),
@@ -324,8 +329,12 @@ pub async fn download(
         "download:PROG|%(info.playlist_index|1)s|%(progress._percent_str)s|%(info.title)s".into(),
         "--ffmpeg-location".into(),
         ffmpeg_dir.to_string_lossy().into_owned(),
+        "-P".into(),
+        format!("home:{}", dest.to_string_lossy()),
+        "-P".into(),
+        format!("temp:{}", tmp_root.to_string_lossy()),
         "-o".into(),
-        dest.join("%(title)s.%(ext)s").to_string_lossy().into_owned(),
+        "%(title)s.%(ext)s".into(),
     ];
 
     if let Some(browser) = cookies_from_browser {
@@ -414,12 +423,43 @@ pub async fn download(
     Ok(())
 }
 
-fn validate_url(input: &str) -> Result<()> {
-    let parsed = url::Url::parse(input).map_err(|e| anyhow!("URL inválida: {e}"))?;
+fn validate_url(input: &str) -> Result<String> {
+    let mut parsed = url::Url::parse(input).map_err(|e| anyhow!("URL inválida: {e}"))?;
     match parsed.scheme() {
-        "http" | "https" => Ok(()),
-        other => Err(anyhow!("esquema no permitido: {other}")),
+        "http" | "https" => {}
+        other => return Err(anyhow!("esquema no permitido: {other}")),
     }
+
+    // YouTube auto-append `&list=RD…` (Mix / radio) cuando pinchas en un vídeo
+    // que forma parte de un mix. Esos playlists son dinámicos/infinitos y
+    // yt-dlp los intenta enumerar hasta timeout → probe cuelga eterno.
+    // Si la URL trae un `v=` explícito, quitamos SOLO los `list=RD*` y
+    // dejamos intactos los playlists reales (PL*, LL, WL, RDCLAK…).
+    let host_is_youtube = parsed
+        .host_str()
+        .map(|h| h.ends_with("youtube.com") || h == "youtu.be")
+        .unwrap_or(false);
+    if host_is_youtube {
+        let has_v = parsed.query_pairs().any(|(k, _)| k == "v");
+        let has_radio_list = parsed
+            .query_pairs()
+            .any(|(k, v)| k == "list" && v.starts_with("RD"));
+        if has_v && has_radio_list {
+            let kept: Vec<(String, String)> = parsed
+                .query_pairs()
+                .filter(|(k, v)| !(k == "list" && v.starts_with("RD"))
+                    && k != "start_radio"
+                    && k != "index")
+                .map(|(k, v)| (k.into_owned(), v.into_owned()))
+                .collect();
+            parsed.query_pairs_mut().clear().extend_pairs(kept.iter());
+            if parsed.query().map(|q| q.is_empty()).unwrap_or(false) {
+                parsed.set_query(None);
+            }
+        }
+    }
+
+    Ok(parsed.to_string())
 }
 
 fn validate_browser(name: &str) -> Result<()> {

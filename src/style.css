@@ -6,13 +6,36 @@
 :root {
   color-scheme: dark;
 
-  /* Palette */
-  --ink:            hsl(220 30% 96%);
-  --ink-soft:       hsl(220 20% 82%);
-  --ink-mute:       hsl(220 15% 60%);
-  --ink-hush:       hsl(220 12% 45%);
+  /* === Surface scale (dark → light, cool neutral tint) ===
+   * Cada nivel sube ~6L. Jerarquía se lee sin depender del borde.
+   * 0 canvas · 1 elevated (input, track zone) · 2 control (chip inactive)
+   * 3 control hover / raised. */
+  --surface-0: hsl(228 14% 10%);
+  --surface-1: hsl(228 12% 16%);
+  --surface-2: hsl(228 10% 22%);
+  --surface-3: hsl(228  9% 28%);
 
-  /* Accent: hot pink, alive */
+  /* === Border scale (opacidad diferenciada por rol) === */
+  --border-passive: hsl(220 15% 100% / 0.06);  /* contenedor pasivo */
+  --border-active:  hsl(220 15% 100% / 0.12);  /* contenedor interactivo */
+  --border-hover:   hsl(220 15% 100% / 0.22);  /* hover */
+  --border-strong:  hsl(220 15% 100% / 0.38);  /* focus (sin rosa) */
+
+  /* Alias legacy — reutilizados por reglas antiguas de este mismo archivo */
+  --glass:    var(--surface-1);
+  --glass-hi: var(--surface-2);
+  --glass-lo: var(--surface-1);
+  --hair:     var(--border-active);
+  --hair-hi:  var(--border-hover);
+
+  /* === Ink (blanco atenuado + jerarquía de grises con contraste AA) === */
+  --ink:            hsl(220 20% 94%);
+  --ink-soft:       hsl(220 15% 80%);
+  --ink-mute:       hsl(220 12% 62%);
+  --ink-hush:       hsl(220 10% 46%);
+
+  /* Accent: hot pink — reservado a acción primaria y estado seleccionado.
+   * No usar en bordes ni fondos de contenedor. */
   --accent:         hsl(340 92% 66%);
   --accent-hi:      hsl(340 100% 78%);
   --accent-ink:     hsl(340 50% 10%);
@@ -23,13 +46,6 @@
   --sig-active:     hsl(340 92% 66%);
   --sig-done:       hsl(340 92% 66%);
   --sig-error:      hsl(2 92% 68%);
-
-  /* Glass — very low alpha so HudWindow shows through */
-  --glass:          hsl(0 0% 100% / 0.06);
-  --glass-hi:       hsl(0 0% 100% / 0.10);
-  --glass-lo:       hsl(0 0% 100% / 0.035);
-  --hair:           hsl(0 0% 100% / 0.09);
-  --hair-hi:        hsl(0 0% 100% / 0.18);
 
   /* Radii */
   --r-lg: 24px;
@@ -47,6 +63,19 @@
 
 * { box-sizing: border-box; }
 
+/* Sin selección de texto en la UI; solo inputs y textareas la conservan. */
+html {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 html, body, #app { height: 100%; margin: 0; padding: 0; }
 
 body {
@@ -54,7 +83,7 @@ body {
   font-size: 14px;
   line-height: 1.45;
   color: var(--ink);
-  background: transparent;   /* let the HudWindow breathe */
+  background: var(--surface-0);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.005em;
@@ -113,8 +142,7 @@ body.phase-error  .shell::before {
   position: fixed;
   top: 0; left: 0; right: 0;
   height: var(--title-h);
-  -webkit-app-region: drag;
-  z-index: 1;
+  z-index: 3;
 }
 
 /* === MAIN COLUMN === */
@@ -162,17 +190,20 @@ body.phase-error  .shell::before {
   align-items: center;
   gap: 6px;
   padding: 6px 6px 6px 22px;
-  background: var(--glass);
-  border: 1px solid var(--hair);
+  background: var(--surface-1);
+  border: 1px solid var(--border-active);
   border-radius: var(--r-pill);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
-  transition: border-color 200ms ease, box-shadow 400ms ease, background 200ms ease;
+  transition: border-color 200ms ease, background 200ms ease;
+}
+.url-pill:hover:not(:focus-within) {
+  background: var(--surface-2);
+  border-color: var(--border-hover);
 }
 .url-pill:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow-glow);
-  background: var(--glass-hi);
+  background: var(--surface-2);
+  border-color: var(--border-strong);
 }
 .url-pill input {
   font: inherit;
@@ -248,13 +279,16 @@ body.phase-error  .shell::before {
   cursor: pointer;
   transition: background 180ms ease, color 180ms ease, transform 180ms ease;
 }
-.seg button:hover { color: var(--ink); }
+.seg button:hover:not([aria-pressed="true"]) {
+  color: var(--ink);
+  background: var(--surface-3);
+}
 .seg button[aria-pressed="true"] {
   color: var(--accent-ink);
   background: linear-gradient(180deg, var(--accent-hi), var(--accent));
   box-shadow: 0 4px 14px -6px var(--accent-glow);
 }
-.seg button:disabled { color: var(--ink-hush); cursor: not-allowed; }
+.seg button:disabled { cursor: not-allowed; }
 
 .controls-row {
   display: flex;
