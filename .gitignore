@@ -1,0 +1,28 @@
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+graft/
+.graph/sessions.db
+
+# deps
+node_modules
+dist
+dist-ssr
+.DS_Store
+
+# rust
+src-tauri/target
+src-tauri/gen
+
+# tauri
+src-tauri/WixTools
+
+# editor
+.vscode
+.idea
+*.log
+
+graft/
+.graph/
+.github/skills
+.github/copilot-instructions.md
+.mcp.json
+.ignore

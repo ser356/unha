@@ -1,0 +1,107 @@
+name: Release (Windows)
+
+# Se dispara al pushear un tag `v*`. Compila SOLO Windows y publica el
+# instalador NSIS (.exe) en la GitHub Release del propio repo.
+#
+# macOS lo compila `publish.sh` en local — este workflow no lo toca.
+# Ambos artefactos (el .exe de aquí + el .app.zip de publish.sh) acaban
+# en la misma Release; el orden no importa porque usamos --clobber.
+#
+# Requisitos:
+#   * Ningún secret adicional. `GITHUB_TOKEN` basta.
+#
+# Coste (plan Free repo privado):
+#   * windows-latest ≈ 12 min × 2× = 24 créditos por release. ~80/mes.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag existente a re-empaquetar (ej. v1.2.0)."
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Resolver TAG
+        id: tag
+        shell: bash
+        run: |
+          if [[ -n "${{ inputs.tag }}" ]]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cachear dependencias de cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: release-windows
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Vite build (genera ../dist para Tauri)
+        run: npm run build
+
+      - name: Instalar cargo-tauri
+        run: cargo install tauri-cli --locked --version "^2"
+
+      - name: cargo tauri build (NSIS)
+        working-directory: src-tauri
+        run: cargo tauri build --target x86_64-pc-windows-msvc --bundles nsis
+
+      - name: Renombrar instalador con naming consistente
+        id: pkg
+        shell: pwsh
+        run: |
+          $src = Get-ChildItem -Recurse -Path "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis" -Filter "*.exe" | Select-Object -First 1
+          if (-not $src) { throw "no encuentro instalador NSIS" }
+          $dst = "unha-${{ steps.tag.outputs.tag }}-windows-x86_64-setup.exe"
+          Copy-Item $src.FullName $dst
+          $hash = (Get-FileHash -Algorithm SHA256 $dst).Hash.ToLower()
+          "$hash  $dst" | Out-File -Encoding ascii "$dst.sha256"
+          "asset=$dst"       | Out-File -Encoding utf8 -Append $env:GITHUB_OUTPUT
+          "sha=$dst.sha256"  | Out-File -Encoding utf8 -Append $env:GITHUB_OUTPUT
+
+      - name: gh release upload (crea si no existe)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG:   ${{ steps.tag.outputs.tag }}
+          ASSET: ${{ steps.pkg.outputs.asset }}
+          SHA:   ${{ steps.pkg.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ASSET" "$SHA" --clobber
+          else
+            gh release create "$TAG" "$ASSET" "$SHA" \
+              --title "unha $TAG" \
+              --generate-notes
+          fi
